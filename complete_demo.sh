@@ -49,11 +49,30 @@ get_server_metadata() {
     METADATA=$(curl -s "${CONNECT2ID_BASE_URL}/.well-known/openid-configuration")
     
     if [ $? -eq 0 ]; then
+        # Get the authorization endpoint from metadata
         AUTHORIZATION_ENDPOINT=$(echo "$METADATA" | jq -r '.authorization_endpoint')
         TOKEN_ENDPOINT=$(echo "$METADATA" | jq -r '.token_endpoint')
         USERINFO_ENDPOINT=$(echo "$METADATA" | jq -r '.userinfo_endpoint')
         REGISTRATION_ENDPOINT=$(echo "$METADATA" | jq -r '.registration_endpoint // "not_supported"')
         ISSUER=$(echo "$METADATA" | jq -r '.issuer')
+        
+        # Debug: Show raw metadata
+        log_info "Raw server metadata:"
+        echo "$METADATA" | jq .
+        echo
+        
+        # Ensure we're using localhost consistently
+        AUTHORIZATION_ENDPOINT=$(echo "$AUTHORIZATION_ENDPOINT" | sed 's/127.0.0.1/localhost/g')
+        TOKEN_ENDPOINT=$(echo "$TOKEN_ENDPOINT" | sed 's/127.0.0.1/localhost/g')
+        USERINFO_ENDPOINT=$(echo "$USERINFO_ENDPOINT" | sed 's/127.0.0.1/localhost/g')
+        REGISTRATION_ENDPOINT=$(echo "$REGISTRATION_ENDPOINT" | sed 's/127.0.0.1/localhost/g')
+        ISSUER=$(echo "$ISSUER" | sed 's/127.0.0.1/localhost/g')
+        
+        # If authorization endpoint is not set, use the default
+        if [ -z "$AUTHORIZATION_ENDPOINT" ] || [ "$AUTHORIZATION_ENDPOINT" = "null" ]; then
+            AUTHORIZATION_ENDPOINT="http://localhost:8080/c2id/authorize"
+            log_warning "Using default authorization endpoint: $AUTHORIZATION_ENDPOINT"
+        fi
         
         log_success "Server metadata retrieved"
         log_info "Issuer: $ISSUER"
@@ -129,32 +148,7 @@ EOF
     else
         log_error "❌ Client registration failed with HTTP $HTTP_CODE"
         log_error "Response: $RESPONSE_BODY"
-        
-        # Try with different master tokens or without auth
-        log_info "Trying registration without authorization..."
-        
-        RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -X POST "$REGISTRATION_ENDPOINT" \
-            -H "Content-Type: application/json" \
-            -d "$REGISTRATION_REQUEST")
-        
-        HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-        RESPONSE_BODY=$(echo "$RESPONSE" | sed '$d')
-        
-        if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
-            log_success "✅ Client registration successful (open registration)!"
-            
-            CLIENT_ID=$(echo "$RESPONSE_BODY" | jq -r '.client_id')
-            CLIENT_SECRET=$(echo "$RESPONSE_BODY" | jq -r '.client_secret // "none"')
-            
-            log_success "📋 CLIENT DETAILS:"
-            echo "$RESPONSE_BODY" | jq .
-            echo
-        else
-            log_error "❌ Client registration failed completely"
-            log_error "You may need to configure the master token or enable open registration"
-            exit 1
-        fi
+        exit 1
     fi
 }
 
@@ -191,7 +185,7 @@ generate_auth_url() {
     # Generate state parameter
     STATE=$(openssl rand -hex 16)
     
-    # Build authorization URL
+    # Build authorization URL using the endpoint from discovery
     AUTH_URL="${AUTHORIZATION_ENDPOINT}?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${SCOPE// /%20}&state=${STATE}&code_challenge=${CODE_CHALLENGE}&code_challenge_method=S256"
     
     log_success "✅ Authorization URL generated:"
@@ -204,6 +198,7 @@ generate_auth_url() {
     log_info "  • redirect_uri=$REDIRECT_URI (registered callback)"
     log_info "  • scope=$SCOPE (requested permissions)"
     log_info "  • PKCE challenge for security"
+    log_info "  • Authorization endpoint: $AUTHORIZATION_ENDPOINT"
     echo
 }
 
@@ -309,6 +304,9 @@ exchange_code_for_tokens() {
     log_info "  • Redirect URI: $REDIRECT_URI"
     log_info "  • Code Verifier: ${CODE_VERIFIER:0:20}..."
     log_info "  • Code Challenge: ${CODE_CHALLENGE:0:20}..."
+    log_info "  • Full Code Verifier: $CODE_VERIFIER"
+    log_info "  • Full Code Challenge: $CODE_CHALLENGE"
+    log_info "  • Authorization Endpoint Used: $AUTHORIZATION_ENDPOINT"
     
     # Make token request with proper client authentication
     if [ "$CLIENT_SECRET" != "none" ] && [ -n "$CLIENT_SECRET" ]; then
@@ -371,6 +369,8 @@ exchange_code_for_tokens() {
         log_error "  • Code verifier length: ${#CODE_VERIFIER}"
         log_error "  • Redirect URI: $REDIRECT_URI"
         log_error "  • Code Challenge: $CODE_CHALLENGE"
+        log_error "  • Full Code Verifier: $CODE_VERIFIER"
+        log_error "  • Authorization Endpoint Used: $AUTHORIZATION_ENDPOINT"
         
         exit 1
     fi
