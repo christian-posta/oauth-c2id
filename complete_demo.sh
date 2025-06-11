@@ -164,10 +164,16 @@ generate_pkce() {
     
     # RFC 7636: Generate code verifier (43-128 chars from unreserved char set)
     # Using base64url without padding for allowed characters
-    CODE_VERIFIER=$(openssl rand 32 | openssl base64 | tr -d "=+/" | tr -d '\n' | cut -c1-43)
+    # Generate more bytes to ensure we have enough characters after transformations
+    CODE_VERIFIER=$(openssl rand 48 | openssl base64 | tr -d "=+/" | tr -d '\n' | cut -c1-43)
+    
+    # Verify length
+    if [ ${#CODE_VERIFIER} -lt 43 ]; then
+        log_error "Generated code verifier is too short (${#CODE_VERIFIER} chars)"
+        exit 1
+    fi
     
     # Generate code challenge: base64url(sha256(code_verifier))
-    # This is the exact method from RFC 7636 and Stack Overflow answer
     CODE_CHALLENGE=$(echo -n "$CODE_VERIFIER" | openssl dgst -binary -sha256 | openssl base64 | tr -d "=+/" | tr "/+" "_-")
     
     log_success "PKCE parameters generated"
@@ -296,6 +302,14 @@ exchange_code_for_tokens() {
     # Prepare token request data
     TOKEN_DATA="grant_type=authorization_code&code=${AUTHORIZATION_CODE}&redirect_uri=${REDIRECT_URI}&code_verifier=${CODE_VERIFIER}"
     
+    # Debug logging
+    log_info "Token request details:"
+    log_info "  • Grant Type: authorization_code"
+    log_info "  • Code: ${AUTHORIZATION_CODE:0:20}..."
+    log_info "  • Redirect URI: $REDIRECT_URI"
+    log_info "  • Code Verifier: ${CODE_VERIFIER:0:20}..."
+    log_info "  • Code Challenge: ${CODE_CHALLENGE:0:20}..."
+    
     # Make token request with proper client authentication
     if [ "$CLIENT_SECRET" != "none" ] && [ -n "$CLIENT_SECRET" ]; then
         # Use HTTP Basic authentication
@@ -355,6 +369,8 @@ exchange_code_for_tokens() {
         log_error "  • Client ID: $CLIENT_ID"
         log_error "  • Auth code length: ${#AUTHORIZATION_CODE}"
         log_error "  • Code verifier length: ${#CODE_VERIFIER}"
+        log_error "  • Redirect URI: $REDIRECT_URI"
+        log_error "  • Code Challenge: $CODE_CHALLENGE"
         
         exit 1
     fi
