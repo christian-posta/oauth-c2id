@@ -1,139 +1,147 @@
-# Connect2ID Demo Setup Guide
+# Connect2ID OAuth 2.0 Demo
 
-This guide uses the Connect2ID demo Docker image which includes everything pre-configured for testing.
+This repository contains a complete OAuth 2.0 demo script that demonstrates the full authorization code flow with PKCE using Connect2ID as the OAuth 2.0/OpenID Connect provider.
 
-## Quick Start
+## Prerequisites
 
-### 1. Create the Docker Compose setup
+- Docker
+- `curl`
+- `jq`
+- `openssl`
+- `base64`
 
-Save the provided `docker-compose.yml` file and run:
+## Setup
 
-```bash
-docker run -d   --name connect2id-demo   -p 8080:8080   -p 8443:8443   -e CATALINA_OPTS="-Xmx2048m -Xms1024m"   c2id/c2id-server-demo:18.2.1
-
-docker logs connect2id-demo
-
-# Check server status
-curl -s http://localhost:8080/c2id/.well-known/openid-configuration | jq .
-```
-
-### 2. Run the demo test script
+### 1. Start the Connect2ID Demo Server
 
 ```bash
-# Make the test script executable
-chmod +x demo_test.sh
+# Make the setup script executable
+chmod +x setup_c2id.sh
 
-# Run the test to discover demo configuration
-./demo_test.sh
+# Run the setup script
+./setup_c2id.sh
 ```
 
-## What the Demo Image Includes
+The setup script will:
+- Clean up any existing Connect2ID container
+- Start a new container with proper configuration
+- Configure necessary Java system properties:
+  - Enable localhost redirect URIs for testing
+  - Enable open registration
+  - Set the issuer URL
+- Wait for the server to start
+- Test the configuration with a sample client registration
+- Show server information and status
 
-The `c2id/c2id-server-demo` image comes with:
-
-- ✅ **Pre-configured demo clients**
-- ✅ **Sample users for testing**
-- ✅ **Complete OpenID Connect/OAuth 2.0 setup**
-- ✅ **Built-in H2 database with demo data**
-- ✅ **Sample login pages**
-- ✅ **Working OAuth 2.0 flows out of the box**
-
-## Testing Flows
-
-### 1. Automatic Discovery
-The test script will automatically try common demo client IDs and user credentials:
-
-**Common Demo Clients:**
-- `000123`
-- `demo`
-- `test`
-- `client`
-
-**Common Demo Users:**
-- `alice:secret`
-- `bob:secret`
-- `demo:demo`
-- `test:test`
-
-### 2. Manual Testing
-
-If you know the specific demo credentials, you can test manually:
+### 2. Prepare the Demo Script
 
 ```bash
-# Test password flow with known credentials
-curl -X POST http://localhost:8080/token \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=password&username=alice&password=secret&client_id=000123"
-
-# Or with client authentication
-CLIENT_CREDENTIALS=$(echo -n "client_id:client_secret" | base64)
-curl -X POST http://localhost:8080/token \
-  -H "Authorization: Basic $CLIENT_CREDENTIALS" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=password&username=alice&password=secret"
+# Make the demo script executable
+chmod +x complete_demo.sh
 ```
 
-### 3. Authorization Code Flow
+## Running the Demo
 
-The test script will generate a complete authorization URL for browser testing:
+### Basic Usage
 
-1. Open the generated URL in your browser
-2. Complete the authentication flow
-3. Get redirected with an authorization code
-4. Exchange the code for tokens
+```bash
+./complete_demo.sh
+```
 
-## Server Endpoints
+### Advanced Options
 
-With the demo server running:
+The script supports several command-line options:
 
-- **Discovery**: `http://localhost:8080/.well-known/openid-configuration`
-- **Authorization**: Check discovery document for exact URL
-- **Token**: Check discovery document for exact URL
-- **UserInfo**: Check discovery document for exact URL
-- **Main Page**: `http://localhost:8080/` (may contain demo instructions)
+```bash
+./complete_demo.sh [OPTIONS]
 
-## Advantages of the Demo Image
+Options:
+  --server URL          Connect2ID server URL (default: http://localhost:8080/c2id)
+  --redirect-uri URI    OAuth 2.0 redirect URI (default: http://localhost:8080/oidc-client/cb)
+  --master-token TOKEN  Master API token for client registration
+  --help, -h           Show help message
+```
 
-1. **Zero Configuration**: Works immediately without setup
-2. **Complete Examples**: Includes working flows and sample data
-3. **Learning Tool**: Perfect for understanding OpenID Connect/OAuth 2.0
-4. **Quick Testing**: Ideal for integration testing and development
+## What the Demo Does
 
-## Next Steps
+The script demonstrates a complete OAuth 2.0 authorization code flow with PKCE:
 
-Once you have the demo working:
+1. **Client Registration**
+   - Registers a new OAuth 2.0 client with the server
+   - Configures redirect URI and required scopes
 
-1. **Explore the demo clients and users**
-2. **Test different OAuth 2.0 flows**
-3. **Build your own client application**
-4. **Move to production configuration when ready**
+2. **Authorization Request**
+   - Generates PKCE parameters for security
+   - Creates authorization URL with proper parameters
+   - Handles state parameter for CSRF protection
+
+3. **Token Exchange**
+   - Exchanges authorization code for tokens
+   - Supports both confidential and public clients
+   - Implements proper client authentication
+
+4. **Token Usage**
+   - Decodes and displays JWT tokens
+   - Makes a UserInfo request with the access token
+   - Shows token details and claims
+
+## Demo Credentials
+
+The Connect2ID demo server comes with pre-configured users:
+
+- Username: `alice`
+- Password: `secret`
 
 ## Troubleshooting
 
-### Server Won't Start
-```bash
-# Check Docker logs
-docker-compose logs connect2id
+### Common Issues
 
-# Verify port availability
-netstat -tlnp | grep 8080
+1. **Server Not Running**
+   ```bash
+   # Check if server is running
+   docker ps | grep connect2id-demo
+   
+   # Check server logs
+   docker logs connect2id-demo
+   ```
 
-# Check Docker image
-docker images | grep c2id
-```
+2. **Connection Issues**
+   ```bash
+   # Test server connectivity
+   curl -v http://localhost:8080/c2id/.well-known/openid-configuration
+   ```
 
-### Can't Find Demo Credentials
-- Check the main server page at `http://localhost:8080/`
-- Look for demo documentation in the Connect2ID logs
-- The test script will try to discover working combinations automatically
+3. **Script Errors**
+   - Ensure all prerequisites are installed
+   - Check script permissions (`chmod +x setup_c2id.sh complete_demo.sh`)
+   - Verify server is running before starting the demo script
 
-### Connection Issues
-```bash
-# Test basic connectivity
-curl -v http://localhost:8080/.well-known/openid-configuration
+### Debug Information
 
-# Check if server is responding
-docker-compose ps
-```
+The scripts include detailed logging:
+- Blue: Information messages
+- Green: Success messages
+- Yellow: Warnings
+- Red: Errors
+- Purple: Step indicators
+- Cyan: Token decoding information
 
-This demo setup should get you up and running with Connect2ID immediately, without any of the configuration complexity we encountered with the minimal image!
+## Security Notes
+
+- The demo uses PKCE for enhanced security
+- State parameter prevents CSRF attacks
+- Client secrets are never logged in full
+- Tokens are truncated in logs for security
+- Server is configured to allow localhost redirect URIs for testing
+
+## Next Steps
+
+After running the demo:
+1. Review the token responses and claims
+2. Try different scopes and client configurations
+3. Experiment with different OAuth 2.0 flows
+4. Implement the flow in your own application
+
+## License
+
+This demo script is provided for educational purposes. Use at your own risk.
