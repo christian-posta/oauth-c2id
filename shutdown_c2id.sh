@@ -1,0 +1,1 @@
+docker kill connect2id-demo
