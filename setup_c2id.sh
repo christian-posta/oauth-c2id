@@ -44,7 +44,18 @@ start_connect2id_with_java_props() {
         -p 8443:8443 \
         --mount type=bind,source="$LOGS_PATH",target=/usr/local/tomcat/logs \
         -e CATALINA_OPTS="-Xmx2048m -Xms1024m" \
-        -e JAVA_OPTS="-Dlog4j2.formatMsgNoLookups=true -Dop.reg.allowLocalhostRedirectionURIsForTest=true -Dop.reg.rejectNonTLSRedirectionURIs=false -Dop.reg.enableOpenRegistration=true -Dop.issuer=http://localhost:8080/c2id" \
+        -e JAVA_OPTS="-Dlog4j2.formatMsgNoLookups=true \
+            -Dop.reg.allowLocalhostRedirectionURIsForTest=true \
+            -Dop.reg.rejectNonTLSRedirectionURIs=false \
+            -Dop.reg.enableOpenRegistration=true \
+            -Dop.issuer=http://localhost:8080/c2id \
+            -Dop.grantHandler.tokenExchange.webAPI.enable=true \
+            -Dop.grantHandler.tokenExchange.webAPI.url=http://localhost:8080/c2id/token-exchange \
+            -Dop.grantHandler.tokenExchange.webAPI.apiAccessToken=ztucZS1ZyFKgh0tUEruUtiSTXhnexmd6 \
+            -Dop.grantHandler.tokenExchange.webAPI.subjectToken.types=urn:ietf:params:oauth:token-type:access_token \
+            -Dop.grantHandler.tokenExchange.webAPI.actorToken.types=urn:ietf:params:oauth:token-type:access_token \
+            -Dop.grantHandler.tokenExchange.webAPI.subjectToken.jwtVerification.1.jwkSetURI=http://localhost:8080/c2id/jwks.json \
+            -Dop.grantHandler.tokenExchange.webAPI.actorToken.jwtVerification.1.jwkSetURI=http://localhost:8080/c2id/jwks.json" \
         c2id/c2id-server-demo:18.2.1
     
     log_success "Connect2ID container started with Java system properties"
